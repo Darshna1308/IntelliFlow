@@ -3,6 +3,7 @@ const {
   isValidTransition,
   getAllowedTransitions,
 } = require("../services/workflowService");
+const { createAuditLog } = require("../services/auditService");
 
 const updateRequestStatus = async (req, res) => {
   try {
@@ -46,6 +47,18 @@ const updateRequestStatus = async (req, res) => {
     }
 
     await request.save();
+
+    await createAuditLog({
+      requestId: request._id,
+      userId: req.user.userId,
+      action: "STATUS_CHANGED",
+      previousStatus,
+      newStatus: status,
+      description: `Request status changed from ${previousStatus} to ${status}`,
+      metadata: {
+        requestId: request.requestId,
+      },
+    });
 
     return res.status(200).json({
       success: true,
