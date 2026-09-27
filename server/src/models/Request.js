@@ -41,7 +41,23 @@ const requestSchema = new mongoose.Schema(
 
     priority: {
       type: String,
-      enum: ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+      enum: [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL",
+      ],
+      default: "MEDIUM",
+    },
+
+    workflowDefaultPriority: {
+      type: String,
+      enum: [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL",
+      ],
       default: "MEDIUM",
     },
 
@@ -73,10 +89,19 @@ const requestSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    stageChangedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-module.exports = mongoose.model("Request", requestSchema);
+module.exports =
+  mongoose.model(
+    "Request",
+    requestSchema
+  );

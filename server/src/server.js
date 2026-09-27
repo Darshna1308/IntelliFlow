@@ -1,25 +1,28 @@
 require("dotenv").config();
 
 const express = require("express");
+
 const connectDB = require("./config/db");
+
 const authRoutes = require("./routes/authRoutes");
 const requestRoutes = require("./routes/requestRoutes");
+const workflowTypeRoutes = require("./routes/workflowTypeRoutes");
 
 const app = express();
 
-const PORT = process.env.PORT || 5000;
+const PORT =
+  process.env.PORT || 5000;
 
-// Middleware
-app.use(express.json());
 
 // Connect to MongoDB
 connectDB();
 
-// Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/requests", requestRoutes);
 
-// Health check
+// Middleware
+app.use(express.json());
+
+
+// Routes
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -27,6 +30,31 @@ app.get("/", (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`IntelliFlow server running on http://localhost:${PORT}`);
-});
+
+app.use(
+  "/api/auth",
+  authRoutes
+);
+
+
+app.use(
+  "/api/requests",
+  requestRoutes
+);
+
+
+app.use(
+  "/api/workflow-types",
+  workflowTypeRoutes
+);
+
+
+// Start server
+app.listen(
+  PORT,
+  () => {
+    console.log(
+      `IntelliFlow server running on http://localhost:${PORT}`
+    );
+  }
+);
