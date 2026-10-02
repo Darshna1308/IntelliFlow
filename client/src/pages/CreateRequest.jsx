@@ -1,92 +1,173 @@
 import {
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
-import { api } from "../api";
+import api from "../services/api";
 
+import PageHeader from "../components/PageHeader";
 import LoadingCard from "../components/LoadingCard";
 import MessageCard from "../components/MessageCard";
-import PageHeader from "../components/PageHeader";
 
 
 function CreateRequest() {
 
-  const [workflowTypes, setWorkflowTypes] =
-    useState([]);
-
-  const [formData, setFormData] =
-    useState({
-      type: "",
-      title: "",
-      description: "",
-      priority: "MEDIUM",
-      dueDate: "",
-    });
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [submitting, setSubmitting] =
-    useState(false);
-
-  const [message, setMessage] =
-    useState("");
-
-  const [success, setSuccess] =
-    useState("");
+  const [
+    workflowTypes,
+    setWorkflowTypes,
+  ] = useState([]);
 
 
-  const loadWorkflowTypes =
-    async () => {
+  const [
+    selectedType,
+    setSelectedType,
+  ] = useState("");
 
-      try {
 
-        setLoading(true);
+  const [
+    title,
+    setTitle,
+  ] = useState("");
 
-        setMessage("");
 
-        const data =
-          await api.getWorkflowTypes();
+  const [
+    description,
+    setDescription,
+  ] = useState("");
 
-        setWorkflowTypes(
-          data.workflowTypes || []
-        );
 
-      } catch (error) {
+  const [
+    priority,
+    setPriority,
+  ] = useState("MEDIUM");
 
-        setMessage(
-          error.message
-        );
 
-      } finally {
+  const [
+    dueDate,
+    setDueDate,
+  ] = useState("");
 
-        setLoading(false);
-      }
-    };
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+
+  const [
+    submitting,
+    setSubmitting,
+  ] = useState(false);
+
+
+  const [
+    error,
+    setError,
+  ] = useState("");
 
 
   useEffect(() => {
+
+    const loadWorkflowTypes =
+      async () => {
+
+        try {
+
+          setLoading(true);
+          setError("");
+
+
+          const response =
+            await api.getWorkflowTypes();
+
+
+          const types =
+            response?.workflowTypes ||
+            response?.data?.workflowTypes ||
+            response?.data ||
+            [];
+
+
+          setWorkflowTypes(
+            Array.isArray(types)
+              ? types
+              : []
+          );
+
+        } catch (loadError) {
+
+          console.error(
+            "Workflow type loading error:",
+            loadError
+          );
+
+
+          setError(
+            loadError?.message ||
+            "Unable to load workflow types."
+          );
+
+        } finally {
+
+          setLoading(false);
+
+        }
+      };
+
 
     loadWorkflowTypes();
 
   }, []);
 
 
-  const getDefaultDueDate = (
+  const selectedWorkflow =
+    useMemo(
+      () =>
+        workflowTypes.find(
+          (workflow) =>
+            workflow._id === selectedType ||
+            workflow.id === selectedType ||
+            workflow.name === selectedType
+        ),
+      [
+        workflowTypes,
+        selectedType,
+      ]
+    );
+
+
+  const calculateDueDate = (
     days
   ) => {
 
     const date =
       new Date();
 
+
     date.setDate(
-      date.getDate() + days
+      date.getDate() +
+      Number(days || 7)
     );
 
-    return date
-      .toISOString()
-      .split("T")[0];
+
+    const year =
+      date.getFullYear();
+
+
+    const month =
+      String(
+        date.getMonth() + 1
+      ).padStart(2, "0");
+
+
+    const day =
+      String(
+        date.getDate()
+      ).padStart(2, "0");
+
+
+    return `${year}-${month}-${day}`;
   };
 
 
@@ -94,462 +175,557 @@ function CreateRequest() {
     event
   ) => {
 
-    const selectedType =
+    const value =
       event.target.value;
 
-    const workflowType =
+
+    setSelectedType(value);
+
+
+    const workflow =
       workflowTypes.find(
         (item) =>
-          item.name ===
-          selectedType
+          item._id === value ||
+          item.id === value ||
+          item.name === value
       );
 
 
-    if (!workflowType) {
+    if (!workflow) {
+      return;
+    }
 
-      setFormData(
-        (previous) => ({
-          ...previous,
-          type: selectedType,
-        })
+
+    setPriority(
+      workflow.defaultPriority ||
+      "MEDIUM"
+    );
+
+
+    setDueDate(
+      calculateDueDate(
+        workflow.defaultDueDays
+      )
+    );
+
+  };
+
+
+  const handleSubmit = async (
+    event
+  ) => {
+
+    event.preventDefault();
+
+    setError("");
+
+
+    if (!selectedType) {
+
+      setError(
+        "Please select a workflow type."
       );
 
       return;
     }
 
 
-    setFormData(
-      (previous) => ({
-        ...previous,
-        type:
-          workflowType.name,
-        priority:
-          workflowType.defaultPriority,
-        dueDate:
-          getDefaultDueDate(
-            workflowType.defaultDueDays
-          ),
-      })
-    );
-  };
+    if (!title.trim()) {
+
+      setError(
+        "Please enter a request title."
+      );
+
+      return;
+    }
 
 
-  const handleChange = (
-    event
-  ) => {
+    if (!description.trim()) {
 
-    const {
-      name,
-      value,
-    } = event.target;
+      setError(
+        "Please enter a request description."
+      );
 
-
-    setFormData(
-      (previous) => ({
-        ...previous,
-        [name]: value,
-      })
-    );
-  };
+      return;
+    }
 
 
-  const selectedWorkflow =
-    workflowTypes.find(
-      (item) =>
-        item.name ===
-        formData.type
-    );
+    try {
+
+      setSubmitting(true);
 
 
-  const handleSubmit =
-    async (event) => {
-
-      event.preventDefault();
-
-      setMessage("");
-
-      setSuccess("");
+      const workflowType =
+        selectedWorkflow?.name ||
+        selectedType;
 
 
-      if (
-        !formData.type ||
-        !formData.title ||
-        !formData.description
-      ) {
-
-        setMessage(
-          "Please fill in all required fields."
-        );
-
-        return;
-      }
-
-
-      try {
-
-        setSubmitting(true);
-
-
-        const data =
-          await api.createRequest(
-            formData
-          );
-
-
-        setSuccess(
-          data.message ||
-          "Request created successfully."
-        );
-
-
-        const createdRequest =
-          data.request;
-
-
-        setFormData({
-          type: "",
-          title: "",
-          description: "",
-          priority: "MEDIUM",
-          dueDate: "",
+      const response =
+        await api.createRequest({
+          type: workflowType,
+          title: title.trim(),
+          description: description.trim(),
+          priority,
+          dueDate: dueDate || null,
         });
 
 
-        if (
-          createdRequest?._id
-        ) {
+      const request =
+        response?.request ||
+        response?.data?.request;
 
-          setTimeout(
-            () => {
 
-              window.location.href =
-                `/request/${createdRequest._id}`;
+      const requestId =
+        request?._id ||
+        request?.id;
 
-            },
-            800
-          );
 
-        }
+      if (!requestId) {
 
-      } catch (error) {
-
-        setMessage(
-          error.message
+        throw new Error(
+          "Request was created but its ID was not returned."
         );
-
-      } finally {
-
-        setSubmitting(false);
       }
-    };
+
+
+      window.location.href =
+        `/request/${requestId}`;
+
+    } catch (submitError) {
+
+      console.error(
+        "Create request error:",
+        submitError
+      );
+
+
+      setError(
+        submitError?.message ||
+        "Unable to create the request."
+      );
+
+    } finally {
+
+      setSubmitting(false);
+
+    }
+  };
 
 
   if (loading) {
 
     return (
-      <LoadingCard
-        message={
-          "Loading workflow types..."
-        }
-      />
+      <main className="page-container">
+
+        <PageHeader
+          eyebrow="Workflow"
+          title="Create Request"
+          description="Start a new request and send it through the appropriate approval workflow."
+        />
+
+        <div className="create-request-loading">
+
+          <LoadingCard />
+
+        </div>
+
+      </main>
     );
   }
 
 
   return (
-    <div className="page-container">
+    <main className="page-container">
 
       <PageHeader
-        eyebrow="NEW WORKFLOW"
+        eyebrow="Workflow"
         title="Create Request"
-        subtitle="Start a new workflow request and provide the information required for review."
+        description="Start a new request and send it through the appropriate approval workflow."
       />
 
 
-      <MessageCard
-        message={message}
-      />
+      <div className="create-request-layout">
 
+        <section className="create-request-form-card">
 
-      {success && (
-        <div className="success-message">
-          {success}
-        </div>
-      )}
+          <div className="create-request-card-header">
 
+            <div>
 
-      <section className="details-section">
-
-        <div className="section-header">
-
-          <div>
-
-            <p className="section-eyebrow">
-              REQUEST DETAILS
-            </p>
-
-            <h2>
-              Workflow Information
-            </h2>
-
-          </div>
-
-        </div>
-
-
-        <form
-          className="request-form"
-          onSubmit={
-            handleSubmit
-          }
-        >
-
-          <div className="form-group">
-
-            <label htmlFor="type">
-              Workflow Type
-            </label>
-
-            <select
-              id="type"
-              name="type"
-              value={
-                formData.type
-              }
-              onChange={
-                handleTypeChange
-              }
-              required
-            >
-
-              <option value="">
-                Select workflow type
-              </option>
-
-              {workflowTypes.map(
-                (workflowType) => (
-
-                  <option
-                    key={
-                      workflowType._id
-                    }
-                    value={
-                      workflowType.name
-                    }
-                  >
-                    {
-                      workflowType.name
-                    }
-                  </option>
-
-                )
-              )}
-
-            </select>
-
-          </div>
-
-
-          {selectedWorkflow && (
-
-            <div className="intelligence-card">
-
-              <span className="intelligence-label">
-                WORKFLOW GUIDANCE
+              <span className="section-eyebrow">
+                Request details
               </span>
 
-              <strong>
-                {
-                  selectedWorkflow
-                    .description
-                }
-              </strong>
+              <h2>
+                Tell us what needs to move forward.
+              </h2>
 
               <p>
-                Suggested priority:{" "}
-                <b>
-                  {
-                    selectedWorkflow
-                      .defaultPriority
-                  }
-                </b>
+                Choose a workflow type, provide the
+                essential details, and IntelliFlow will
+                prepare the request for review.
               </p>
 
-              <p>
-                Default deadline:{" "}
-                <b>
-                  {
-                    selectedWorkflow
-                      .defaultDueDays
-                  }{" "}
-                  days
-                </b>
-              </p>
+            </div>
 
-              {selectedWorkflow
-                .requiredDocuments
-                ?.length > 0 && (
+          </div>
 
-                <p>
-                  Recommended documents:{" "}
-                  <b>
-                    {
-                      selectedWorkflow
-                        .requiredDocuments
-                        .join(", ")
-                    }
-                  </b>
-                </p>
 
-              )}
+          {error && (
+
+            <div className="create-request-message">
+
+              <MessageCard
+                type="error"
+                message={error}
+              />
 
             </div>
 
           )}
 
 
-          <div className="form-group">
-
-            <label htmlFor="title">
-              Request Title
-            </label>
-
-            <input
-              id="title"
-              type="text"
-              name="title"
-              value={
-                formData.title
-              }
-              onChange={
-                handleChange
-              }
-              placeholder="Enter a clear request title"
-              required
-            />
-
-          </div>
-
-
-          <div className="form-group">
-
-            <label htmlFor="description">
-              Description
-            </label>
-
-            <textarea
-              id="description"
-              name="description"
-              value={
-                formData.description
-              }
-              onChange={
-                handleChange
-              }
-              placeholder="Describe the request, objective, requirements, and relevant context."
-              rows="7"
-              required
-            />
-
-          </div>
-
-
-          <div className="form-row">
+          <form
+            className="create-request-form"
+            onSubmit={handleSubmit}
+          >
 
             <div className="form-group">
 
-              <label htmlFor="priority">
-                Priority
+              <label htmlFor="workflowType">
+                Workflow type
               </label>
 
               <select
-                id="priority"
-                name="priority"
-                value={
-                  formData.priority
-                }
-                onChange={
-                  handleChange
-                }
-                required
+                id="workflowType"
+                value={selectedType}
+                onChange={handleTypeChange}
+                disabled={submitting}
               >
 
-                <option value="LOW">
-                  LOW
+                <option value="">
+                  Select a workflow type
                 </option>
 
-                <option value="MEDIUM">
-                  MEDIUM
-                </option>
+                {workflowTypes.map(
+                  (workflow) => {
 
-                <option value="HIGH">
-                  HIGH
-                </option>
+                    const value =
+                      workflow._id ||
+                      workflow.id ||
+                      workflow.name;
 
-                <option value="CRITICAL">
-                  CRITICAL
-                </option>
+
+                    return (
+                      <option
+                        key={value}
+                        value={value}
+                      >
+                        {workflow.name}
+                      </option>
+                    );
+                  }
+                )}
 
               </select>
+
+              {selectedWorkflow?.description && (
+
+                <small>
+                  {selectedWorkflow.description}
+                </small>
+
+              )}
 
             </div>
 
 
             <div className="form-group">
 
-              <label htmlFor="dueDate">
-                Due Date
+              <label htmlFor="requestTitle">
+                Request title
               </label>
 
               <input
-                id="dueDate"
-                type="date"
-                name="dueDate"
-                value={
-                  formData.dueDate
+                id="requestTitle"
+                type="text"
+                value={title}
+                onChange={(event) =>
+                  setTitle(
+                    event.target.value
+                  )
                 }
-                onChange={
-                  handleChange
+                placeholder="Enter a clear, specific title"
+                maxLength={150}
+                disabled={submitting}
+              />
+
+              <small>
+                {title.length}/150 characters
+              </small>
+
+            </div>
+
+
+            <div className="form-group">
+
+              <label htmlFor="requestDescription">
+                Description
+              </label>
+
+              <textarea
+                id="requestDescription"
+                value={description}
+                onChange={(event) =>
+                  setDescription(
+                    event.target.value
+                  )
                 }
-                required
+                placeholder="Describe what is needed, why it is needed, and any important context."
+                rows={7}
+                disabled={submitting}
               />
 
             </div>
 
+
+            <div className="form-grid">
+
+              <div className="form-group">
+
+                <label htmlFor="priority">
+                  Priority
+                </label>
+
+                <select
+                  id="priority"
+                  value={priority}
+                  onChange={(event) =>
+                    setPriority(
+                      event.target.value
+                    )
+                  }
+                  disabled={submitting}
+                >
+
+                  <option value="LOW">
+                    Low
+                  </option>
+
+                  <option value="MEDIUM">
+                    Medium
+                  </option>
+
+                  <option value="HIGH">
+                    High
+                  </option>
+
+                  <option value="CRITICAL">
+                    Critical
+                  </option>
+
+                </select>
+
+                <small>
+                  Default priority is based on the
+                  selected workflow.
+                </small>
+
+              </div>
+
+
+              <div className="form-group">
+
+                <label htmlFor="dueDate">
+                  Due date
+                </label>
+
+                <input
+                  id="dueDate"
+                  type="date"
+                  value={dueDate}
+                  onChange={(event) =>
+                    setDueDate(
+                      event.target.value
+                    )
+                  }
+                  disabled={submitting}
+                />
+
+                <small>
+                  Suggested from the workflow's
+                  default turnaround time.
+                </small>
+
+              </div>
+
+            </div>
+
+
+            <div className="create-request-actions">
+
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  window.location.href = "/"
+                }
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+
+
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={submitting}
+              >
+                {submitting
+                  ? "Creating request..."
+                  : "Create request"}
+              </button>
+
+            </div>
+
+          </form>
+
+        </section>
+
+
+        <aside className="create-request-sidebar">
+
+          <div className="create-request-info-card">
+
+            <span className="section-eyebrow">
+              Workflow intelligence
+            </span>
+
+            <h3>
+              What happens next?
+            </h3>
+
+            <div className="create-request-step-list">
+
+              <div className="create-request-step">
+
+                <span>
+                  01
+                </span>
+
+                <div>
+
+                  <strong>
+                    Request created
+                  </strong>
+
+                  <p>
+                    Your request starts in the
+                    draft stage.
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              <div className="create-request-step">
+
+                <span>
+                  02
+                </span>
+
+                <div>
+
+                  <strong>
+                    Review workflow
+                  </strong>
+
+                  <p>
+                    The request can move through
+                    the configured review stages.
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              <div className="create-request-step">
+
+                <span>
+                  03
+                </span>
+
+                <div>
+
+                  <strong>
+                    Intelligent monitoring
+                  </strong>
+
+                  <p>
+                    Deadline, priority, and workflow
+                    signals are tracked automatically.
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
           </div>
 
 
-          <div className="form-actions">
+          {selectedWorkflow && (
 
-            <button
-              type="button"
-              onClick={() =>
-                window.location.href =
-                  "/"
-              }
-            >
-              Cancel
-            </button>
+            <div className="create-request-summary-card">
+
+              <span className="section-eyebrow">
+                Selected workflow
+              </span>
+
+              <h3>
+                {selectedWorkflow.name}
+              </h3>
+
+              <div className="create-request-summary-row">
+
+                <span>
+                  Default priority
+                </span>
+
+                <strong>
+                  {selectedWorkflow.defaultPriority ||
+                    "MEDIUM"}
+                </strong>
+
+              </div>
 
 
-            <button
-              type="submit"
-              disabled={
-                submitting
-              }
-            >
-              {submitting
-                ? "Creating..."
-                : "Create Request"}
-            </button>
+              <div className="create-request-summary-row">
 
-          </div>
+                <span>
+                  Default turnaround
+                </span>
 
-        </form>
+                <strong>
+                  {selectedWorkflow.defaultDueDays ||
+                    7}{" "}
+                  days
+                </strong>
 
-      </section>
+              </div>
 
-    </div>
+            </div>
+
+          )}
+
+        </aside>
+
+      </div>
+
+    </main>
   );
 }
 

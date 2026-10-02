@@ -1,6 +1,6 @@
 import {
   logout,
-} from "./utils/auth";
+} from "../../../client/src/utils/auth";
 
 
 const API_BASE_URL =

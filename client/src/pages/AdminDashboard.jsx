@@ -1,40 +1,55 @@
 import {
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
-import { api } from "../api";
+import api from "../services/api";
 
 import DeadlineBadge from "../components/DeadlineBadge";
 import LoadingCard from "../components/LoadingCard";
 import MessageCard from "../components/MessageCard";
 import PageHeader from "../components/PageHeader";
 import RiskBadge from "../components/RiskBadge";
-import SectionHeader from "../components/SectionHeader";
+import StatusBadge from "../components/StatusBadge";
 
 
 function AdminDashboard() {
 
-  const [analytics, setAnalytics] =
-    useState(null);
+  const [
+    analytics,
+    setAnalytics,
+  ] = useState(null);
 
-  const [requests, setRequests] =
-    useState([]);
 
-  const [reviewers, setReviewers] =
-    useState([]);
+  const [
+    requests,
+    setRequests,
+  ] = useState([]);
 
-  const [selectedReviewers, setSelectedReviewers] =
-    useState({});
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    reviewers,
+    setReviewers,
+  ] = useState([]);
 
-  const [message, setMessage] =
-    useState("");
 
-  const [savingRequest, setSavingRequest] =
-    useState("");
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+
+  const [
+    message,
+    setMessage,
+  ] = useState("");
+
+
+  const [
+    assigningRequest,
+    setAssigningRequest,
+  ] = useState("");
 
 
   const loadDashboard =
@@ -46,10 +61,11 @@ function AdminDashboard() {
 
         setMessage("");
 
+
         const [
           analyticsData,
-          requestsData,
-          reviewersData,
+          requestData,
+          reviewerData,
         ] = await Promise.all([
           api.getAdminAnalytics(),
           api.getAllRequests(),
@@ -63,42 +79,15 @@ function AdminDashboard() {
         );
 
 
-        const loadedRequests =
-          requestsData.requests ||
-          [];
-
-
         setRequests(
-          loadedRequests
-        );
-
-
-        setReviewers(
-          reviewersData.reviewers ||
+          requestData.requests ||
           []
         );
 
 
-        const assignments = {};
-
-
-        loadedRequests.forEach(
-          (request) => {
-
-            assignments[
-              request._id
-            ] =
-              request
-                .assignedReviewer
-                ?._id ||
-              "";
-
-          }
-        );
-
-
-        setSelectedReviewers(
-          assignments
+        setReviewers(
+          reviewerData.reviewers ||
+          []
         );
 
       } catch (error) {
@@ -110,6 +99,7 @@ function AdminDashboard() {
       } finally {
 
         setLoading(false);
+
       }
     };
 
@@ -121,100 +111,80 @@ function AdminDashboard() {
   }, []);
 
 
-  const navigate = (
-    path
-  ) => {
-
-    window.location.href =
-      path;
-  };
+  const getIntelligence =
+    (request) =>
+      request.intelligence ||
+      {};
 
 
-  const formatStatus = (
-    value
-  ) => {
+  const formatStatus =
+    (value) => {
 
-    if (!value) {
-      return "—";
-    }
-
-
-    return value
-      .replaceAll(
-        "_",
-        " "
-      )
-      .toLowerCase()
-      .replace(
-        /\b\w/g,
-        (letter) =>
-          letter.toUpperCase()
-      );
-  };
-
-
-  const formatDate = (
-    value
-  ) => {
-
-    if (!value) {
-      return "—";
-    }
-
-
-    return new Date(
-      value
-    ).toLocaleDateString(
-      "en-IN",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
+      if (!value) {
+        return "—";
       }
-    );
-  };
 
 
-  const handleReviewerChange = (
-    requestId,
-    reviewerId
-  ) => {
+      return value
+        .replaceAll(
+          "_",
+          " "
+        )
+        .toLowerCase()
+        .replace(
+          /\b\w/g,
+          (letter) =>
+            letter.toUpperCase()
+        );
 
-    setSelectedReviewers(
-      (previous) => ({
-        ...previous,
-        [requestId]:
-          reviewerId,
-      })
-    );
+    };
 
-  };
+
+  const formatDate =
+    (value) => {
+
+      if (!value) {
+        return "—";
+      }
+
+
+      return new Date(
+        value
+      ).toLocaleDateString(
+        "en-IN",
+        {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }
+      );
+
+    };
+
+
+  const openRequest =
+    (requestId) => {
+
+      window.location.href =
+        `/request/${requestId}`;
+
+    };
 
 
   const handleAssignReviewer =
     async (
-      requestId
+      requestId,
+      reviewerId
     ) => {
 
-      const reviewerId =
-        selectedReviewers[
-          requestId
-        ];
-
-
       if (!reviewerId) {
-
-        setMessage(
-          "Please select a reviewer first."
-        );
-
         return;
       }
 
 
       try {
 
-        setSavingRequest(
+        setAssigningRequest(
           requestId
         );
 
@@ -237,11 +207,88 @@ function AdminDashboard() {
 
       } finally {
 
-        setSavingRequest(
+        setAssigningRequest(
           ""
         );
+
       }
     };
+
+
+  const attentionRequests =
+    useMemo(
+      () =>
+        requests.filter(
+          (request) => {
+
+            const intelligence =
+              getIntelligence(
+                request
+              );
+
+
+            return (
+              [
+                "HIGH",
+                "CRITICAL",
+              ].includes(
+                intelligence.riskLevel
+              ) ||
+              [
+                "DUE_SOON",
+                "OVERDUE",
+              ].includes(
+                intelligence.deadlineStatus
+              )
+            );
+
+          }
+        ),
+      [requests]
+    );
+
+
+  const highRiskCount =
+    useMemo(
+      () =>
+        requests.filter(
+          (request) =>
+            [
+              "HIGH",
+              "CRITICAL",
+            ].includes(
+              getIntelligence(
+                request
+              ).riskLevel
+            )
+        ).length,
+      [requests]
+    );
+
+
+  const overdueCount =
+    useMemo(
+      () =>
+        requests.filter(
+          (request) =>
+            getIntelligence(
+              request
+            ).deadlineStatus ===
+            "OVERDUE"
+        ).length,
+      [requests]
+    );
+
+
+  const unassignedCount =
+    useMemo(
+      () =>
+        requests.filter(
+          (request) =>
+            !request.assignedReviewer
+        ).length,
+      [requests]
+    );
 
 
   if (loading) {
@@ -249,97 +296,102 @@ function AdminDashboard() {
     return (
       <LoadingCard
         message={
-          "Loading admin control center..."
+          "Loading control center..."
         }
       />
     );
   }
 
 
+  if (!analytics) {
+
+    return (
+      <div className="page-container">
+
+        <MessageCard
+          message={
+            message ||
+            "Admin analytics could not be loaded."
+          }
+        />
+
+      </div>
+    );
+  }
+
+
   const overview =
-    analytics?.overview ||
+    analytics.overview ||
     {};
 
 
-  const priorityDistribution =
+  const priorityAnalysis =
+    analytics.priorityAnalysis ||
+    {};
+
+
+  const workflowPriority =
     analytics
-      ?.priorityDistribution ||
-    {};
+      .workflowDefaultPriorityDistribution ||
+    [];
 
 
   const riskDistribution =
-    analytics
-      ?.riskDistribution ||
-    {};
+    analytics.riskDistribution ||
+    [];
 
 
   const deadlineDistribution =
-    analytics
-      ?.deadlineDistribution ||
-    {};
+    analytics.deadlineDistribution ||
+    [];
 
 
   const reviewerWorkload =
-    analytics
-      ?.reviewerWorkload ||
+    analytics.reviewerWorkload ||
     [];
 
 
-  const attentionRequests =
-    analytics
-      ?.attentionRequests ||
-    [];
+  const getDistributionValue =
+    (
+      distribution,
+      key
+    ) => {
 
+      if (
+        Array.isArray(
+          distribution
+        )
+      ) {
 
-  const averageRisk =
-    analytics
-      ?.averageRisk ||
-    0;
-
-
-  const getDistributionValue = (
-    distribution,
-    key
-  ) => {
-
-    if (
-      Array.isArray(
-        distribution
-      )
-    ) {
-
-      const item =
-        distribution.find(
-          (entry) =>
-            entry._id ===
-              key ||
-            entry.name ===
+        const item =
+          distribution.find(
+            (entry) =>
+              entry._id ===
               key
+          );
+
+
+        return (
+          item?.count ||
+          0
         );
+      }
 
 
       return (
-        item?.count ||
-        item?.total ||
+        distribution[key] ||
         0
       );
-    }
-
-
-    return (
-      distribution[key] ||
-      0
-    );
-  };
+    };
 
 
   return (
     <div className="page-container">
 
       <PageHeader
-        eyebrow="ADMIN CONTROL CENTER"
+        eyebrow="CONTROL CENTER"
         title="Admin Dashboard"
-        subtitle="Monitor workflow activity, risk signals, reviewer workload, and request assignments."
+        subtitle="Monitor workflows, reviewer capacity, risk signals, and system-wide activity."
       />
 
 
@@ -348,75 +400,192 @@ function AdminDashboard() {
       />
 
 
-      {/* OVERVIEW */}
+      <section className="dashboard-stats-grid">
 
-      <section className="details-section">
+        <div className="dashboard-stat-card">
 
-        <SectionHeader
-          eyebrow="SYSTEM OVERVIEW"
-          title="Workflow Snapshot"
-        />
+          <span className="dashboard-stat-label">
+            Total Requests
+          </span>
+
+          <strong className="dashboard-stat-value">
+            {
+              overview.totalRequests ??
+              requests.length
+            }
+          </strong>
+
+          <span className="dashboard-stat-meta">
+            All workflows
+          </span>
+
+        </div>
 
 
-        <div className="intelligence-grid">
+        <div className="dashboard-stat-card">
 
-          <div className="intelligence-card">
+          <span className="dashboard-stat-label">
+            High / Critical Risk
+          </span>
 
-            <span className="intelligence-label">
-              Total Requests
-            </span>
+          <strong className="dashboard-stat-value">
+            {
+              overview.highRiskRequests ??
+              highRiskCount
+            }
+          </strong>
 
-            <strong className="intelligence-value">
-              {
-                overview.totalRequests ??
-                requests.length
-              }
-            </strong>
+          <span className="dashboard-stat-meta">
+            Risk requires attention
+          </span>
+
+        </div>
+
+
+        <div className="dashboard-stat-card">
+
+          <span className="dashboard-stat-label">
+            Overdue
+          </span>
+
+          <strong className="dashboard-stat-value">
+            {
+              overview.overdueRequests ??
+              overdueCount
+            }
+          </strong>
+
+          <span className="dashboard-stat-meta">
+            Past their deadline
+          </span>
+
+        </div>
+
+
+        <div className="dashboard-stat-card">
+
+          <span className="dashboard-stat-label">
+            Unassigned
+          </span>
+
+          <strong className="dashboard-stat-value">
+            {
+              overview.unassignedRequests ??
+              unassignedCount
+            }
+          </strong>
+
+          <span className="dashboard-stat-meta">
+            Need reviewer assignment
+          </span>
+
+        </div>
+
+      </section>
+
+
+      <section className="dashboard-section">
+
+        <div className="dashboard-section-header">
+
+          <div>
+
+            <p className="section-eyebrow">
+              PRIORITY INTELLIGENCE
+            </p>
+
+            <h2>
+              Workflow vs Actual Priority
+            </h2>
 
           </div>
 
+        </div>
 
-          <div className="intelligence-card">
 
-            <span className="intelligence-label">
-              Pending
+        <div className="dashboard-overview-grid">
+
+          <div className="dashboard-overview-card">
+
+            <span>
+              Escalated
             </span>
 
-            <strong className="intelligence-value">
+            <strong>
               {
-                overview.pendingRequests ??
+                priorityAnalysis
+                  .escalated ??
                 0
               }
             </strong>
 
+            <small>
+              Actual priority above default
+            </small>
+
           </div>
 
 
-          <div className="intelligence-card">
+          <div className="dashboard-overview-card">
 
-            <span className="intelligence-label">
-              Approved
+            <span>
+              Matched
             </span>
 
-            <strong className="intelligence-value">
+            <strong>
               {
-                overview.approvedRequests ??
+                priorityAnalysis
+                  .matched ??
                 0
               }
             </strong>
 
+            <small>
+              Priority matches workflow default
+            </small>
+
           </div>
 
 
-          <div className="intelligence-card">
+          <div className="dashboard-overview-card">
 
-            <span className="intelligence-label">
+            <span>
+              Downgraded
+            </span>
+
+            <strong>
+              {
+                priorityAnalysis
+                  .downgraded ??
+                0
+              }
+            </strong>
+
+            <small>
+              Actual priority below default
+            </small>
+
+          </div>
+
+
+          <div className="dashboard-overview-card">
+
+            <span>
               Average Risk
             </span>
 
-            <strong className="intelligence-value">
-              {averageRisk}
+            <strong>
+              {
+                Math.round(
+                  analytics.averageRisk ||
+                  0
+                )
+              }
             </strong>
+
+            <small>
+              Risk score out of 100
+            </small>
 
           </div>
 
@@ -425,161 +594,214 @@ function AdminDashboard() {
       </section>
 
 
-      {/* PRIORITY */}
+      <section className="dashboard-section">
 
-      <section className="details-section">
+        <div className="dashboard-section-header">
 
-        <SectionHeader
-          eyebrow="PRIORITY ANALYSIS"
-          title="Request Priority Distribution"
-        />
+          <div>
 
+            <p className="section-eyebrow">
+              SYSTEM DISTRIBUTION
+            </p>
 
-        <div className="intelligence-grid">
+            <h2>
+              Workflow Signals
+            </h2>
 
-          {[
-            "LOW",
-            "MEDIUM",
-            "HIGH",
-            "CRITICAL",
-          ].map(
-            (priority) => (
-
-              <div
-                className="intelligence-card"
-                key={
-                  priority
-                }
-              >
-
-                <span className="intelligence-label">
-                  {priority}
-                </span>
-
-                <strong className="intelligence-value">
-                  {
-                    getDistributionValue(
-                      priorityDistribution,
-                      priority
-                    )
-                  }
-                </strong>
-
-              </div>
-
-            )
-          )}
+          </div>
 
         </div>
 
-      </section>
+
+        <div className="dashboard-overview-grid">
+
+          <div className="dashboard-overview-card">
+
+            <span>
+              Default Low Priority
+            </span>
+
+            <strong>
+              {
+                getDistributionValue(
+                  workflowPriority,
+                  "LOW"
+                )
+              }
+            </strong>
+
+          </div>
 
 
-      {/* RISK & DEADLINE */}
+          <div className="dashboard-overview-card">
 
-      <section className="details-section">
+            <span>
+              Default Medium
+            </span>
 
-        <SectionHeader
-          eyebrow="INTELLIGENCE"
-          title="Risk & Deadline Distribution"
-        />
+            <strong>
+              {
+                getDistributionValue(
+                  workflowPriority,
+                  "MEDIUM"
+                )
+              }
+            </strong>
+
+          </div>
 
 
-        <div className="intelligence-grid">
+          <div className="dashboard-overview-card">
 
-          {[
-            "LOW",
-            "MEDIUM",
-            "HIGH",
-            "CRITICAL",
-          ].map(
-            (risk) => (
+            <span>
+              Default High
+            </span>
 
-              <div
-                className="intelligence-card"
-                key={
-                  `risk-${risk}`
-                }
-              >
+            <strong>
+              {
+                getDistributionValue(
+                  workflowPriority,
+                  "HIGH"
+                )
+              }
+            </strong>
 
-                <span className="intelligence-label">
-                  {risk} Risk
-                </span>
+          </div>
 
-                <strong className="intelligence-value">
-                  {
-                    getDistributionValue(
-                      riskDistribution,
-                      risk
-                    )
-                  }
-                </strong>
 
-              </div>
+          <div className="dashboard-overview-card">
 
-            )
-          )}
+            <span>
+              Default Critical
+            </span>
+
+            <strong>
+              {
+                getDistributionValue(
+                  workflowPriority,
+                  "CRITICAL"
+                )
+              }
+            </strong>
+
+          </div>
 
         </div>
 
 
         <div
-          className="intelligence-grid"
+          className="dashboard-overview-grid"
           style={{
-            marginTop:
-              "16px",
+            marginTop: "16px",
           }}
         >
 
-          {[
-            "ON_TRACK",
-            "DUE_SOON",
-            "OVERDUE",
-          ].map(
-            (deadline) => (
+          <div className="dashboard-overview-card">
 
-              <div
-                className="intelligence-card"
-                key={
-                  `deadline-${deadline}`
-                }
-              >
+            <span>
+              Low Risk
+            </span>
 
-                <span className="intelligence-label">
-                  {deadline
-                    .replaceAll(
-                      "_",
-                      " "
-                    )}
-                </span>
+            <strong>
+              {
+                getDistributionValue(
+                  riskDistribution,
+                  "LOW"
+                )
+              }
+            </strong>
 
-                <strong className="intelligence-value">
-                  {
-                    getDistributionValue(
-                      deadlineDistribution,
-                      deadline
-                    )
-                  }
-                </strong>
+          </div>
 
-              </div>
 
-            )
-          )}
+          <div className="dashboard-overview-card">
+
+            <span>
+              Medium Risk
+            </span>
+
+            <strong>
+              {
+                getDistributionValue(
+                  riskDistribution,
+                  "MEDIUM"
+                )
+              }
+            </strong>
+
+          </div>
+
+
+          <div className="dashboard-overview-card">
+
+            <span>
+              High Risk
+            </span>
+
+            <strong>
+              {
+                getDistributionValue(
+                  riskDistribution,
+                  "HIGH"
+                )
+              }
+            </strong>
+
+          </div>
+
+
+          <div className="dashboard-overview-card">
+
+            <span>
+              Critical Risk
+            </span>
+
+            <strong>
+              {
+                getDistributionValue(
+                  riskDistribution,
+                  "CRITICAL"
+                )
+              }
+            </strong>
+
+          </div>
 
         </div>
 
       </section>
 
 
-      {/* ATTENTION QUEUE */}
+      <section className="dashboard-section">
 
-      <section className="details-section">
+        <div className="dashboard-section-header">
 
-        <SectionHeader
-          eyebrow="ATTENTION QUEUE"
-          title="Requests Requiring Attention"
-        />
+          <div>
+
+            <p className="section-eyebrow">
+              ATTENTION QUEUE
+            </p>
+
+            <h2>
+              Requests Requiring Attention
+            </h2>
+
+          </div>
+
+          <span className="dashboard-count">
+            {
+              attentionRequests.length
+            }{" "}
+            request
+            {
+              attentionRequests.length ===
+              1
+                ? ""
+                : "s"
+            }
+          </span>
+
+        </div>
 
 
         {attentionRequests.length ===
@@ -588,76 +810,81 @@ function AdminDashboard() {
           <div className="empty-state">
 
             <p>
-              No requests currently
-              require administrative
-              attention.
+              No requests currently require
+              immediate administrative attention.
             </p>
 
           </div>
 
         ) : (
 
-          <div className="document-list">
+          <div className="request-card-list">
 
             {attentionRequests.map(
               (request) => {
 
                 const intelligence =
-                  request
-                    .intelligence ||
-                  {};
+                  getIntelligence(
+                    request
+                  );
 
 
                 return (
-                  <div
-                    className="document-item"
+                  <button
+                    type="button"
+                    className="request-card"
                     key={
                       request._id
                     }
+                    onClick={() =>
+                      openRequest(
+                        request._id
+                      )
+                    }
                   >
 
-                    <div>
+                    <div className="request-card-top">
 
-                      <strong>
-                        {
-                          request
-                            .requestId
-                        }{" "}
-                        —{" "}
-                        {
-                          request.title
-                        }
-                      </strong>
+                      <div>
 
+                        <span className="request-card-id">
+                          {
+                            request.requestId
+                          }
+                        </span>
 
-                      <span>
-                        {formatStatus(
+                        <h3>
+                          {
+                            request.title
+                          }
+                        </h3>
+
+                      </div>
+
+                      <StatusBadge
+                        status={
                           request.status
-                        )}
-                      </span>
-
-
-                      <span>
-                        Due:{" "}
-                        {formatDate(
-                          request.dueDate
-                        )}
-                      </span>
+                        }
+                      />
 
                     </div>
 
 
-                    <div
-                      style={{
-                        display:
-                          "flex",
-                        flexDirection:
-                          "column",
-                        alignItems:
-                          "flex-end",
-                        gap: "8px",
-                      }}
-                    >
+                    <div className="request-card-meta">
+
+                      <span>
+                        {
+                          request.type
+                        }
+                      </span>
+
+                      <span>
+                        Priority:{" "}
+                        {
+                          request.priority ||
+                          "MEDIUM"
+                        }
+                      </span>
 
                       <RiskBadge
                         risk={
@@ -666,7 +893,6 @@ function AdminDashboard() {
                         }
                       />
 
-
                       <DeadlineBadge
                         status={
                           intelligence
@@ -674,22 +900,11 @@ function AdminDashboard() {
                         }
                       />
 
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(
-                            `/request/${request._id}`
-                          )
-                        }
-                      >
-                        Open Request
-                      </button>
-
                     </div>
 
-                  </div>
+                  </button>
                 );
+
               }
             )}
 
@@ -700,14 +915,36 @@ function AdminDashboard() {
       </section>
 
 
-      {/* REVIEWER WORKLOAD */}
+      <section className="dashboard-section">
 
-      <section className="details-section">
+        <div className="dashboard-section-header">
 
-        <SectionHeader
-          eyebrow="TEAM CAPACITY"
-          title="Reviewer Workload"
-        />
+          <div>
+
+            <p className="section-eyebrow">
+              REVIEWER CAPACITY
+            </p>
+
+            <h2>
+              Reviewer Workload
+            </h2>
+
+          </div>
+
+          <span className="dashboard-count">
+            {
+              reviewers.length
+            }{" "}
+            reviewer
+            {
+              reviewers.length ===
+              1
+                ? ""
+                : "s"
+            }
+          </span>
+
+        </div>
 
 
         {reviewerWorkload.length ===
@@ -716,64 +953,46 @@ function AdminDashboard() {
           <div className="empty-state">
 
             <p>
-              No reviewer workload
-              data is available.
+              No reviewer workload data is
+              currently available.
             </p>
 
           </div>
 
         ) : (
 
-          <div className="document-list">
+          <div className="dashboard-overview-grid">
 
             {reviewerWorkload.map(
               (reviewer) => (
 
                 <div
-                  className="document-item"
+                  className="dashboard-overview-card"
                   key={
                     reviewer._id ||
-                    reviewer.reviewerId ||
-                    reviewer.email
+                    reviewer.reviewerId
                   }
                 >
 
-                  <div>
+                  <span>
+                    {
+                      reviewer.name ||
+                      reviewer.reviewerName ||
+                      "Reviewer"
+                    }
+                  </span>
 
-                    <strong>
-                      {
-                        reviewer.name ||
-                        reviewer.reviewerName ||
-                        "Reviewer"
-                      }
-                    </strong>
+                  <strong>
+                    {
+                      reviewer.total ??
+                      reviewer.count ??
+                      0
+                    }
+                  </strong>
 
-
-                    <span>
-                      {
-                        reviewer.email ||
-                        ""
-                      }
-                    </span>
-
-                  </div>
-
-
-                  <div>
-
-                    <strong>
-                      {
-                        reviewer.totalRequests ??
-                        reviewer.total ??
-                        0
-                      }
-                    </strong>
-
-                    <span>
-                      Assigned Requests
-                    </span>
-
-                  </div>
+                  <small>
+                    Assigned workflows
+                  </small>
 
                 </div>
 
@@ -787,14 +1006,30 @@ function AdminDashboard() {
       </section>
 
 
-      {/* ALL REQUESTS */}
+      <section className="dashboard-section">
 
-      <section className="details-section">
+        <div className="dashboard-section-header">
 
-        <SectionHeader
-          eyebrow="WORKFLOW MANAGEMENT"
-          title="All Requests"
-        />
+          <div>
+
+            <p className="section-eyebrow">
+              REQUEST MANAGEMENT
+            </p>
+
+            <h2>
+              All Workflows
+            </h2>
+
+          </div>
+
+          <span className="dashboard-count">
+            {
+              requests.length
+            }{" "}
+            total
+          </span>
+
+        </div>
 
 
         {requests.length ===
@@ -803,105 +1038,84 @@ function AdminDashboard() {
           <div className="empty-state">
 
             <p>
-              No workflow requests
-              have been created yet.
+              No workflow requests exist yet.
             </p>
 
           </div>
 
         ) : (
 
-          <div className="document-list">
+          <div className="request-card-list">
 
             {requests.map(
               (request) => {
 
                 const intelligence =
-                  request
-                    .intelligence ||
-                  {};
-
-
-                const selectedReviewer =
-                  selectedReviewers[
-                    request._id
-                  ] ||
-                  request
-                    .assignedReviewer
-                    ?._id ||
-                  "";
+                  getIntelligence(
+                    request
+                  );
 
 
                 return (
                   <div
-                    className="document-item"
+                    className="request-card"
                     key={
                       request._id
                     }
                   >
 
-                    <div>
+                    <div className="request-card-top">
 
-                      <strong>
-                        {
-                          request
-                            .requestId
-                        }{" "}
-                        —{" "}
-                        {
-                          request.title
+                      <button
+                        type="button"
+                        className="request-card-main"
+                        onClick={() =>
+                          openRequest(
+                            request._id
+                          )
                         }
-                      </strong>
+                      >
+
+                        <span className="request-card-id">
+                          {
+                            request.requestId
+                          }
+                        </span>
+
+                        <h3>
+                          {
+                            request.title
+                          }
+                        </h3>
+
+                      </button>
 
 
-                      <span>
-                        {request.type} ·{" "}
-                        {formatStatus(
+                      <StatusBadge
+                        status={
                           request.status
-                        )}
-                      </span>
-
-
-                      <span>
-                        Created:{" "}
-                        {formatDate(
-                          request.createdAt
-                        )}
-                      </span>
-
-
-                      <span>
-                        Due:{" "}
-                        {formatDate(
-                          request.dueDate
-                        )}
-                      </span>
-
-
-                      <span>
-                        Reviewer:{" "}
-                        {
-                          request
-                            .assignedReviewer
-                            ?.name ||
-                          "Unassigned"
                         }
-                      </span>
+                      />
 
                     </div>
 
 
-                    <div
-                      style={{
-                        display:
-                          "flex",
-                        flexDirection:
-                          "column",
-                        alignItems:
-                          "flex-end",
-                        gap: "8px",
-                      }}
-                    >
+                    <div className="request-card-meta">
+
+                      <span>
+                        {
+                          request.type
+                        }
+                      </span>
+
+                      <span>
+                        Created{" "}
+                        {
+                          formatDate(
+                            request.createdAt
+                          )
+                        }
+                      </span>
 
                       <RiskBadge
                         risk={
@@ -910,7 +1124,6 @@ function AdminDashboard() {
                         }
                       />
 
-
                       <DeadlineBadge
                         status={
                           intelligence
@@ -918,26 +1131,50 @@ function AdminDashboard() {
                         }
                       />
 
+                    </div>
+
+
+                    <div
+                      className="form-group"
+                      style={{
+                        marginTop: "16px",
+                      }}
+                    >
+
+                      <label
+                        htmlFor={
+                          `reviewer-${request._id}`
+                        }
+                      >
+                        Assign Reviewer
+                      </label>
 
                       <select
+                        id={
+                          `reviewer-${request._id}`
+                        }
                         value={
-                          selectedReviewer
+                          request
+                            .assignedReviewer
+                            ?._id ||
+                          ""
+                        }
+                        disabled={
+                          assigningRequest ===
+                          request._id
                         }
                         onChange={(
                           event
                         ) =>
-                          handleReviewerChange(
+                          handleAssignReviewer(
                             request._id,
-                            event
-                              .target
-                              .value
+                            event.target.value
                           )
                         }
-                        aria-label="Select reviewer"
                       >
 
                         <option value="">
-                          Select Reviewer
+                          Select reviewer
                         </option>
 
                         {reviewers.map(
@@ -953,6 +1190,10 @@ function AdminDashboard() {
                             >
                               {
                                 reviewer.name
+                              }{" "}
+                              —{" "}
+                              {
+                                reviewer.email
                               }
                             </option>
 
@@ -961,52 +1202,11 @@ function AdminDashboard() {
 
                       </select>
 
-
-                      <div
-                        style={{
-                          display:
-                            "flex",
-                          gap:
-                            "8px",
-                        }}
-                      >
-
-                        <button
-                          type="button"
-                          disabled={
-                            savingRequest ===
-                            request._id
-                          }
-                          onClick={() =>
-                            handleAssignReviewer(
-                              request._id
-                            )
-                          }
-                        >
-                          {savingRequest ===
-                          request._id
-                            ? "Saving..."
-                            : "Assign Reviewer"}
-                        </button>
-
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigate(
-                              `/request/${request._id}`
-                            )
-                          }
-                        >
-                          Open
-                        </button>
-
-                      </div>
-
                     </div>
 
                   </div>
                 );
+
               }
             )}
 

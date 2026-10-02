@@ -3,7 +3,7 @@ import {
   useState,
 } from "react";
 
-import { api } from "../api";
+import api from "../services/api";
 
 import DeadlineBadge from "../components/DeadlineBadge";
 import LoadingCard from "../components/LoadingCard";
@@ -22,35 +22,73 @@ function RequestDetails() {
     )[1];
 
 
-  const [request, setRequest] =
-    useState(null);
-
-  const [auditLogs, setAuditLogs] =
-    useState([]);
-
-  const [documents, setDocuments] =
-    useState([]);
-
-  const [comments, setComments] =
-    useState([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [message, setMessage] =
-    useState("");
-
-  const [actionLoading, setActionLoading] =
-    useState(false);
-
-  const [comment, setComment] =
-    useState("");
-
-  const [selectedStatus, setSelectedStatus] =
-    useState("");
+  const [
+    request,
+    setRequest,
+  ] = useState(null);
 
 
-  const loadRequest =
+  const [
+    auditLogs,
+    setAuditLogs,
+  ] = useState([]);
+
+
+  const [
+    documents,
+    setDocuments,
+  ] = useState([]);
+
+
+  const [
+    comments,
+    setComments,
+  ] = useState([]);
+
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+
+  const [
+    message,
+    setMessage,
+  ] = useState("");
+
+
+  const [
+    commentMessage,
+    setCommentMessage,
+  ] = useState("");
+
+
+  const [
+    selectedStatus,
+    setSelectedStatus,
+  ] = useState("");
+
+
+  const [
+    submittingStatus,
+    setSubmittingStatus,
+  ] = useState(false);
+
+
+  const [
+    submittingComment,
+    setSubmittingComment,
+  ] = useState(false);
+
+
+  const [
+    uploading,
+    setUploading,
+  ] = useState(false);
+
+
+  const loadRequestData =
     async () => {
 
       try {
@@ -118,9 +156,19 @@ function RequestDetails() {
 
   useEffect(() => {
 
-    if (requestId) {
-      loadRequest();
+    if (!requestId) {
+
+      setMessage(
+        "Invalid request."
+      );
+
+      setLoading(false);
+
+      return;
     }
+
+
+    loadRequestData();
 
   }, [requestId]);
 
@@ -141,6 +189,7 @@ function RequestDetails() {
     if (!value) {
       return "—";
     }
+
 
     return value
       .replaceAll(
@@ -164,6 +213,7 @@ function RequestDetails() {
       return "—";
     }
 
+
     return new Date(
       value
     ).toLocaleDateString(
@@ -185,6 +235,7 @@ function RequestDetails() {
       return "—";
     }
 
+
     return new Date(
       value
     ).toLocaleString(
@@ -200,9 +251,12 @@ function RequestDetails() {
   };
 
 
-  const getAllowedStatuses = (
-    status
-  ) => {
+  const getAllowedStatuses = () => {
+
+    if (!request) {
+      return [];
+    }
+
 
     const transitions = {
       DRAFT: [
@@ -234,42 +288,40 @@ function RequestDetails() {
 
 
     return (
-      transitions[status] ||
-      []
+      transitions[
+        request.status
+      ] || []
     );
   };
 
 
   const handleStatusUpdate =
-    async () => {
+    async (
+      status
+    ) => {
 
-      if (!selectedStatus) {
-
-        setMessage(
-          "Please select a workflow action."
-        );
-
+      if (!status) {
         return;
       }
 
 
-      const reviewAction =
+      const requiresComment =
         [
           "APPROVED",
           "REJECTED",
           "CHANGES_REQUESTED",
         ].includes(
-          selectedStatus
+          status
         );
 
 
       if (
-        reviewAction &&
-        !comment.trim()
+        requiresComment &&
+        !commentMessage.trim()
       ) {
 
         setMessage(
-          "A comment is required for this workflow action."
+          "Please add a comment before completing this workflow action."
         );
 
         return;
@@ -278,7 +330,7 @@ function RequestDetails() {
 
       try {
 
-        setActionLoading(
+        setSubmittingStatus(
           true
         );
 
@@ -287,17 +339,22 @@ function RequestDetails() {
 
         await api.updateRequestStatus(
           requestId,
-          selectedStatus,
-          comment.trim()
+          status,
+          commentMessage.trim()
         );
 
 
-        setComment("");
+        setSelectedStatus(
+          ""
+        );
 
-        setSelectedStatus("");
+
+        setCommentMessage(
+          ""
+        );
 
 
-        await loadRequest();
+        await loadRequestData();
 
       } catch (error) {
 
@@ -307,7 +364,7 @@ function RequestDetails() {
 
       } finally {
 
-        setActionLoading(
+        setSubmittingStatus(
           false
         );
       }
@@ -315,9 +372,14 @@ function RequestDetails() {
 
 
   const handleCommentSubmit =
-    async () => {
+    async (event) => {
 
-      if (!comment.trim()) {
+      event.preventDefault();
+
+
+      if (
+        !commentMessage.trim()
+      ) {
 
         setMessage(
           "Please enter a comment."
@@ -329,7 +391,7 @@ function RequestDetails() {
 
       try {
 
-        setActionLoading(
+        setSubmittingComment(
           true
         );
 
@@ -338,14 +400,24 @@ function RequestDetails() {
 
         await api.createComment(
           requestId,
-          comment.trim(),
-          "GENERAL"
+          commentMessage.trim()
         );
 
 
-        setComment("");
+        setCommentMessage(
+          ""
+        );
 
-        await loadRequest();
+
+        const data =
+          await api.getComments(
+            requestId
+          );
+
+
+        setComments(
+          data.comments || []
+        );
 
       } catch (error) {
 
@@ -355,7 +427,7 @@ function RequestDetails() {
 
       } finally {
 
-        setActionLoading(
+        setSubmittingComment(
           false
         );
       }
@@ -378,9 +450,7 @@ function RequestDetails() {
 
       try {
 
-        setActionLoading(
-          true
-        );
+        setUploading(true);
 
         setMessage("");
 
@@ -391,11 +461,15 @@ function RequestDetails() {
         );
 
 
-        event.target.value =
-          "";
+        const data =
+          await api.getDocuments(
+            requestId
+          );
 
 
-        await loadRequest();
+        setDocuments(
+          data.documents || []
+        );
 
       } catch (error) {
 
@@ -405,9 +479,9 @@ function RequestDetails() {
 
       } finally {
 
-        setActionLoading(
-          false
-        );
+        setUploading(false);
+
+        event.target.value = "";
       }
     };
 
@@ -432,7 +506,7 @@ function RequestDetails() {
         <MessageCard
           message={
             message ||
-            "Request could not be found."
+            "Request could not be loaded."
           }
         />
 
@@ -456,9 +530,46 @@ function RequestDetails() {
 
 
   const allowedStatuses =
-    getAllowedStatuses(
-      request.status
+    getAllowedStatuses();
+
+
+  const requiresComment =
+    [
+      "APPROVED",
+      "REJECTED",
+      "CHANGES_REQUESTED",
+    ].includes(
+      selectedStatus
     );
+
+
+  const user =
+    JSON.parse(
+      localStorage.getItem(
+        "intelliflow_user"
+      ) || "null"
+    );
+
+
+  const isUser =
+    user?.role === "USER";
+
+
+  const isReviewer =
+    user?.role === "REVIEWER";
+
+
+  const isAdmin =
+    user?.role === "ADMIN";
+
+
+  const canTakeWorkflowAction =
+    (
+      isUser ||
+      isReviewer ||
+      isAdmin
+    ) &&
+    allowedStatuses.length > 0;
 
 
   return (
@@ -467,8 +578,7 @@ function RequestDetails() {
       <PageHeader
         eyebrow="WORKFLOW REQUEST"
         title={
-          request.title ||
-          request.requestId
+          request.title
         }
         subtitle={
           `${request.requestId} · ${request.type}`
@@ -491,13 +601,11 @@ function RequestDetails() {
       />
 
 
-      {/* INTELLIGENCE */}
-
       <section className="details-section">
 
         <SectionHeader
-          eyebrow="INTELLIGENCE"
-          title="Workflow Intelligence"
+          eyebrow="REQUEST STATUS"
+          title="Current Workflow State"
         />
 
 
@@ -506,15 +614,22 @@ function RequestDetails() {
           <div className="intelligence-card">
 
             <span className="intelligence-label">
-              Risk Level
+              Status
             </span>
 
-            <RiskBadge
-              risk={
-                intelligence
-                  .riskLevel
-              }
-            />
+            <div
+              style={{
+                marginTop: "10px",
+              }}
+            >
+
+              <StatusBadge
+                status={
+                  request.status
+                }
+              />
+
+            </div>
 
           </div>
 
@@ -522,16 +637,39 @@ function RequestDetails() {
           <div className="intelligence-card">
 
             <span className="intelligence-label">
-              Risk Score
+              Priority
             </span>
 
             <strong className="intelligence-value">
               {
-                intelligence
-                  .riskScore ??
-                0
+                request.priority ||
+                "MEDIUM"
               }
             </strong>
+
+          </div>
+
+
+          <div className="intelligence-card">
+
+            <span className="intelligence-label">
+              Risk
+            </span>
+
+            <div
+              style={{
+                marginTop: "10px",
+              }}
+            >
+
+              <RiskBadge
+                risk={
+                  intelligence
+                    .riskLevel
+                }
+              />
+
+            </div>
 
           </div>
 
@@ -542,45 +680,58 @@ function RequestDetails() {
               Deadline
             </span>
 
-            <DeadlineBadge
-              status={
-                intelligence
-                  .deadlineStatus
-              }
-            />
+            <div
+              style={{
+                marginTop: "10px",
+              }}
+            >
 
-          </div>
+              <DeadlineBadge
+                status={
+                  intelligence
+                    .deadlineStatus
+                }
+              />
 
-
-          <div className="intelligence-card">
-
-            <span className="intelligence-label">
-              Days in Stage
-            </span>
-
-            <strong className="intelligence-value">
-              {
-                intelligence
-                  .daysInCurrentStage ??
-                0
-              }
-            </strong>
+            </div>
 
           </div>
 
         </div>
 
+      </section>
 
-        {intelligence.reasons
-          ?.length > 0 && (
 
-          <div className="intelligence-card">
+      <section className="details-section">
 
-            <span className="intelligence-label">
-              Risk Factors
-            </span>
+        <SectionHeader
+          eyebrow="INTELLIGENCE"
+          title="Workflow Risk Analysis"
+        />
+
+
+        <div className="intelligence-card">
+
+          <span className="intelligence-label">
+            Risk Score
+          </span>
+
+          <strong className="intelligence-value">
+            {
+              intelligence
+                .riskScore ??
+              0
+            }
+            /100
+          </strong>
+
+
+          {intelligence
+            .reasons
+            ?.length > 0 && (
 
             <ul>
+
               {intelligence.reasons.map(
                 (
                   reason,
@@ -597,48 +748,44 @@ function RequestDetails() {
 
                 )
               )}
+
             </ul>
 
-          </div>
-
-        )}
+          )}
 
 
-        {intelligence.recommendation && (
+          {intelligence
+            .recommendation && (
 
-          <div className="intelligence-card">
-
-            <span className="intelligence-label">
-              Recommendation
-            </span>
-
-            <strong>
+            <p>
+              <b>
+                Recommendation:
+              </b>{" "}
               {
                 intelligence
                   .recommendation
               }
-            </strong>
+            </p>
 
-          </div>
+          )}
 
-        )}
+        </div>
 
       </section>
 
-
-      {/* REQUEST INFORMATION */}
 
       <section className="details-section">
 
         <SectionHeader
           eyebrow="REQUEST INFORMATION"
-          title="Request Details"
+          title="Workflow Details"
         />
 
 
         <div className="request-info-grid">
 
           <div>
+
             <span>
               Request ID
             </span>
@@ -648,12 +795,14 @@ function RequestDetails() {
                 request.requestId
               }
             </strong>
+
           </div>
 
 
           <div>
+
             <span>
-              Workflow Type
+              Type
             </span>
 
             <strong>
@@ -661,67 +810,12 @@ function RequestDetails() {
                 request.type
               }
             </strong>
+
           </div>
 
 
           <div>
-            <span>
-              Status
-            </span>
 
-            <StatusBadge
-              status={
-                request.status
-              }
-            />
-          </div>
-
-
-          <div>
-            <span>
-              Priority
-            </span>
-
-            <strong>
-              {
-                request.priority ||
-                "MEDIUM"
-              }
-            </strong>
-          </div>
-
-
-          <div>
-            <span>
-              Created
-            </span>
-
-            <strong>
-              {
-                formatDate(
-                  request.createdAt
-                )
-              }
-            </strong>
-          </div>
-
-
-          <div>
-            <span>
-              Due Date
-            </span>
-
-            <strong>
-              {
-                formatDate(
-                  request.dueDate
-                )
-              }
-            </strong>
-          </div>
-
-
-          <div>
             <span>
               Created By
             </span>
@@ -733,12 +827,14 @@ function RequestDetails() {
                 "—"
               }
             </strong>
+
           </div>
 
 
           <div>
+
             <span>
-              Assigned Reviewer
+              Reviewer
             </span>
 
             <strong>
@@ -749,6 +845,75 @@ function RequestDetails() {
                 "Unassigned"
               }
             </strong>
+
+          </div>
+
+
+          <div>
+
+            <span>
+              Created
+            </span>
+
+            <strong>
+              {
+                formatDate(
+                  request.createdAt
+                )
+              }
+            </strong>
+
+          </div>
+
+
+          <div>
+
+            <span>
+              Due Date
+            </span>
+
+            <strong>
+              {
+                formatDate(
+                  request.dueDate
+                )
+              }
+            </strong>
+
+          </div>
+
+
+          <div>
+
+            <span>
+              Stage Changed
+            </span>
+
+            <strong>
+              {
+                formatDateTime(
+                  request.stageChangedAt
+                )
+              }
+            </strong>
+
+          </div>
+
+
+          <div>
+
+            <span>
+              Submitted
+            </span>
+
+            <strong>
+              {
+                formatDateTime(
+                  request.submittedAt
+                )
+              }
+            </strong>
+
           </div>
 
         </div>
@@ -771,29 +936,70 @@ function RequestDetails() {
       </section>
 
 
-      {/* WORKFLOW ACTION */}
-
-      {allowedStatuses.length >
-        0 && (
+      {canTakeWorkflowAction && (
 
         <section className="details-section">
 
-          <SectionHeader
-            eyebrow="WORKFLOW ACTION"
-            title="Update Request Status"
-          />
+          <div className="workflow-actions">
+
+            <div className="workflow-actions-header">
+
+              <div>
+
+                <p className="section-eyebrow">
+                  WORKFLOW ACTIONS
+                </p>
+
+                <h3>
+                  Move this request forward
+                </h3>
+
+                <p>
+                  Available actions depend on
+                  the current workflow state
+                  and your role.
+                </p>
+
+              </div>
+
+            </div>
 
 
-          <div className="request-form">
+            <div className="workflow-action-note">
+
+              Current state:{" "}
+              <strong>
+                {
+                  formatStatus(
+                    request.status
+                  )
+                }
+              </strong>
+              {" · "}
+              Available transitions:{" "}
+              <strong>
+                {
+                  allowedStatuses
+                    .map(
+                      formatStatus
+                    )
+                    .join(
+                      ", "
+                    )
+                }
+              </strong>
+
+            </div>
+
 
             <div className="form-group">
 
-              <label htmlFor="workflowStatus">
-                Next Status
+              <label htmlFor="workflow-status">
+                Select Workflow Action
               </label>
 
               <select
-                id="workflowStatus"
+                id="workflow-status"
                 value={
                   selectedStatus
                 }
@@ -801,15 +1007,13 @@ function RequestDetails() {
                   event
                 ) =>
                   setSelectedStatus(
-                    event
-                      .target
-                      .value
+                    event.target.value
                   )
                 }
               >
 
                 <option value="">
-                  Select workflow action
+                  Select an action
                 </option>
 
                 {allowedStatuses.map(
@@ -838,50 +1042,102 @@ function RequestDetails() {
             </div>
 
 
-            <div className="form-group">
+            {selectedStatus && (
 
-              <label htmlFor="workflowComment">
-                Comment
-              </label>
+              <div className="form-group">
 
-              <textarea
-                id="workflowComment"
-                value={
-                  comment
-                }
-                onChange={(
-                  event
-                ) =>
-                  setComment(
+                <label htmlFor="workflow-comment">
+
+                  {requiresComment
+                    ? "Comment Required"
+                    : "Comment"}
+
+                </label>
+
+                <textarea
+                  id="workflow-comment"
+                  className="workflow-comment"
+                  value={
+                    commentMessage
+                  }
+                  onChange={(
                     event
-                      .target
-                      .value
-                  )
-                }
-                placeholder="Add a comment or review note."
-                rows="5"
-              />
+                  ) =>
+                    setCommentMessage(
+                      event.target.value
+                    )
+                  }
+                  placeholder={
+                    requiresComment
+                      ? "Explain the decision or requested changes..."
+                      : "Add an optional workflow comment..."
+                  }
+                  rows="4"
+                />
 
-            </div>
+              </div>
+
+            )}
 
 
-            <div className="form-actions">
+            {selectedStatus && (
 
-              <button
-                type="button"
-                disabled={
-                  actionLoading
-                }
-                onClick={
-                  handleStatusUpdate
-                }
-              >
-                {actionLoading
-                  ? "Updating..."
-                  : "Update Status"}
-              </button>
+              <div className="workflow-action-grid">
 
-            </div>
+                <button
+                  type="button"
+                  className={
+                    `workflow-action ${
+                      selectedStatus ===
+                      "REJECTED"
+                        ? "workflow-action-danger"
+                        : selectedStatus ===
+                            "CHANGES_REQUESTED"
+                          ? "workflow-action-warning"
+                          : "workflow-action-primary"
+                    }`
+                  }
+                  disabled={
+                    submittingStatus
+                  }
+                  onClick={() =>
+                    handleStatusUpdate(
+                      selectedStatus
+                    )
+                  }
+                >
+                  {submittingStatus
+                    ? "Updating..."
+                    : `Confirm ${formatStatus(
+                        selectedStatus
+                      )}`}
+                </button>
+
+
+                <button
+                  type="button"
+                  className="workflow-action"
+                  disabled={
+                    submittingStatus
+                  }
+                  onClick={() => {
+
+                    setSelectedStatus(
+                      ""
+                    );
+
+                    setCommentMessage(
+                      ""
+                    );
+
+                  }}
+                >
+                  Cancel Action
+                </button>
+
+              </div>
+
+            )}
 
           </div>
 
@@ -890,7 +1146,27 @@ function RequestDetails() {
       )}
 
 
-      {/* DOCUMENTS */}
+      {!canTakeWorkflowAction && (
+
+        <section className="details-section">
+
+          <SectionHeader
+            eyebrow="WORKFLOW ACTIONS"
+            title="No Action Available"
+          />
+
+          <div className="workflow-action-note">
+
+            This request has no workflow
+            transition currently available
+            to your role.
+
+          </div>
+
+        </section>
+
+      )}
+
 
       <section className="details-section">
 
@@ -898,22 +1174,27 @@ function RequestDetails() {
           eyebrow="DOCUMENTS"
           title="Request Documents"
           action={
+
             <label className="file-upload-button">
 
-              Upload Document
+              {
+                uploading
+                  ? "Uploading..."
+                  : "Upload Document"
+              }
 
               <input
                 type="file"
+                disabled={
+                  uploading
+                }
                 onChange={
                   handleDocumentUpload
                 }
-                disabled={
-                  actionLoading
-                }
-                hidden
               />
 
             </label>
+
           }
         />
 
@@ -924,8 +1205,8 @@ function RequestDetails() {
           <div className="empty-state">
 
             <p>
-              No documents have
-              been uploaded yet.
+              No documents have been
+              uploaded for this request.
             </p>
 
           </div>
@@ -955,31 +1236,32 @@ function RequestDetails() {
 
                     <span>
                       {
-                        document.mimeType
+                        document
+                          .mimeType
                       }
                     </span>
-
-                    <span>
-                      Uploaded:{" "}
-                      {
-                        formatDateTime(
-                          document.createdAt
-                        )
-                      }
-                    </span>
-
-                  </div>
-
-
-                  <div>
 
                     <span>
                       {
                         Math.round(
-                          document.size /
-                          1024
+                          (
+                            document.size ||
+                            0
+                          ) /
+                            1024
                         )
-                      } KB
+                      }{" "}
+                      KB
+                    </span>
+
+                    <span>
+                      Uploaded by{" "}
+                      {
+                        document
+                          .uploadedBy
+                          ?.name ||
+                        "User"
+                      }
                     </span>
 
                   </div>
@@ -996,97 +1278,107 @@ function RequestDetails() {
       </section>
 
 
-      {/* COMMENTS */}
-
       <section className="details-section">
 
         <SectionHeader
-          eyebrow="COLLABORATION"
-          title="Comments"
+          eyebrow="COMMENTS"
+          title="Discussion"
         />
 
 
-        <div className="request-form">
+        <form
+          className="workflow-actions"
+          onSubmit={
+            handleCommentSubmit
+          }
+        >
 
           <div className="form-group">
 
-            <label htmlFor="generalComment">
+            <label htmlFor="general-comment">
               Add Comment
             </label>
 
             <textarea
-              id="generalComment"
+              id="general-comment"
+              className="workflow-comment"
               value={
-                comment
+                commentMessage
               }
               onChange={(
                 event
               ) =>
-                setComment(
-                  event
-                    .target
-                    .value
+                setCommentMessage(
+                  event.target.value
                 )
               }
-              placeholder="Write a comment for the workflow discussion."
+              placeholder="Add context, questions, or additional information..."
               rows="4"
             />
 
           </div>
 
 
-          <div className="form-actions">
+          <div className="workflow-action-grid">
 
             <button
-              type="button"
+              type="submit"
+              className="workflow-action workflow-action-primary"
               disabled={
-                actionLoading
-              }
-              onClick={
-                handleCommentSubmit
+                submittingComment
               }
             >
-              {actionLoading
-                ? "Adding..."
-                : "Add Comment"}
+              {submittingComment
+                ? "Posting..."
+                : "Post Comment"}
             </button>
 
           </div>
 
-        </div>
+        </form>
 
 
         {comments.length ===
         0 ? (
 
-          <div className="empty-state">
+          <div
+            className="empty-state"
+            style={{
+              marginTop: "16px",
+            }}
+          >
 
             <p>
-              No comments have
-              been added yet.
+              No comments have been
+              added yet.
             </p>
 
           </div>
 
         ) : (
 
-          <div className="document-list">
+          <div
+            className="comment-list"
+            style={{
+              marginTop: "18px",
+            }}
+          >
 
             {comments.map(
-              (item) => (
+              (comment) => (
 
                 <div
-                  className="document-item"
+                  className="comment-item"
                   key={
-                    item._id
+                    comment._id
                   }
                 >
 
-                  <div>
+                  <div className="comment-item-header">
 
                     <strong>
                       {
-                        item.userId
+                        comment.userId
                           ?.name ||
                         "User"
                       }
@@ -1094,31 +1386,19 @@ function RequestDetails() {
 
                     <span>
                       {
-                        item.type ||
-                        "GENERAL"
-                      }
-                    </span>
-
-                    <span>
-                      {
                         formatDateTime(
-                          item.createdAt
+                          comment.createdAt
                         )
                       }
                     </span>
 
                   </div>
 
-
-                  <div>
-
-                    <p>
-                      {
-                        item.message
-                      }
-                    </p>
-
-                  </div>
+                  <p>
+                    {
+                      comment.message
+                    }
+                  </p>
 
                 </div>
 
@@ -1131,8 +1411,6 @@ function RequestDetails() {
 
       </section>
 
-
-      {/* AUDIT TRAIL */}
 
       <section className="details-section">
 
@@ -1148,43 +1426,33 @@ function RequestDetails() {
           <div className="empty-state">
 
             <p>
-              No audit history is
-              available yet.
+              No audit activity is
+              available for this request.
             </p>
 
           </div>
 
         ) : (
 
-          <div className="document-list">
+          <div className="audit-list">
 
             {auditLogs.map(
               (log) => (
 
                 <div
-                  className="document-item"
+                  className="audit-item"
                   key={
                     log._id
                   }
                 >
 
-                  <div>
+                  <div className="audit-item-header">
 
                     <strong>
                       {
                         log.action
                       }
                     </strong>
-
-
-                    <span>
-                      {
-                        log.userId
-                          ?.name ||
-                        "System User"
-                      }
-                    </span>
-
 
                     <span>
                       {
@@ -1196,35 +1464,11 @@ function RequestDetails() {
 
                   </div>
 
-
-                  <div>
-
-                    {log.previousStatus && (
-
-                      <span>
-                        {
-                          formatStatus(
-                            log.previousStatus
-                          )
-                        }{" "}
-                        →{" "}
-                        {
-                          formatStatus(
-                            log.newStatus
-                          )
-                        }
-                      </span>
-
-                    )}
-
-
-                    <p>
-                      {
-                        log.description
-                      }
-                    </p>
-
-                  </div>
+                  <p>
+                    {
+                      log.description
+                    }
+                  </p>
 
                 </div>
 
