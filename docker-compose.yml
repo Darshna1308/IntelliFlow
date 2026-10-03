@@ -1,0 +1,36 @@
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+
+    container_name: intelliflow-server
+
+    env_file:
+      - ./server/.env
+
+    ports:
+      - "5000:5000"
+
+    volumes:
+      - intelliflow_uploads:/app/uploads
+
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+
+    container_name: intelliflow-client
+
+    ports:
+      - "3000:80"
+
+    depends_on:
+      - server
+
+    restart: unless-stopped
+
+volumes:
+  intelliflow_uploads:

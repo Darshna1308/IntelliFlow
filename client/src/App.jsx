@@ -1,7 +1,4 @@
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 
 import Navbar from "./components/Navbar";
 
@@ -17,162 +14,82 @@ import {
   isAuthenticated,
 } from "./utils/auth";
 
-
 function App() {
-
-  const [
-    authenticated,
-    setAuthenticated,
-  ] = useState(
+  const [authenticated, setAuthenticated] = useState(
     isAuthenticated()
   );
 
-
-  const [
-    user,
-    setUser,
-  ] = useState(
+  const [user, setUser] = useState(
     getStoredUser()
   );
 
-
   useEffect(() => {
-
-    const handleStorageChange =
-      () => {
-
-        setAuthenticated(
-          isAuthenticated()
-        );
-
-        setUser(
-          getStoredUser()
-        );
-      };
-
+    const handleStorageChange = () => {
+      setAuthenticated(isAuthenticated());
+      setUser(getStoredUser());
+    };
 
     window.addEventListener(
       "storage",
       handleStorageChange
     );
 
-
     return () => {
-
       window.removeEventListener(
         "storage",
         handleStorageChange
       );
-
     };
-
   }, []);
 
-
-  const currentPath =
-    window.location.pathname;
-
+  const currentPath = window.location.pathname;
 
   if (!authenticated) {
-
-    return (
-      <Login />
-    );
+    return <Login />;
   }
 
-
   const renderPage = () => {
-
-    if (
-      currentPath ===
-      "/create-request"
-    ) {
-
-      if (
-        user?.role !==
-        "USER"
-      ) {
-
+    if (currentPath === "/create-request") {
+      if (user?.role !== "USER") {
         return (
           <DashboardByRole
-            role={
-              user?.role
-            }
+            role={user?.role}
           />
         );
       }
 
-
-      return (
-        <CreateRequest />
-      );
+      return <CreateRequest />;
     }
 
-
-    if (
-      currentPath.startsWith(
-        "/request/"
-      )
-    ) {
-
-      return (
-        <RequestDetails />
-      );
+    if (currentPath.startsWith("/request/")) {
+      return <RequestDetails />;
     }
-
 
     return (
       <DashboardByRole
-        role={
-          user?.role
-        }
+        role={user?.role}
       />
     );
   };
 
-
   return (
     <>
-
       <Navbar />
-
       {renderPage()}
-
     </>
   );
 }
 
-
-function DashboardByRole({
-  role,
-}) {
-
-  if (
-    role ===
-    "ADMIN"
-  ) {
-
-    return (
-      <AdminDashboard />
-    );
+function DashboardByRole({ role }) {
+  if (role === "ADMIN") {
+    return <AdminDashboard />;
   }
 
-
-  if (
-    role ===
-    "REVIEWER"
-  ) {
-
-    return (
-      <ReviewerDashboard />
-    );
+  if (role === "REVIEWER") {
+    return <ReviewerDashboard />;
   }
 
-
-  return (
-    <UserDashboard />
-  );
+  return <UserDashboard />;
 }
-
 
 export default App;
