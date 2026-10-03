@@ -25,6 +25,7 @@ app.use(
     origin: [
       "http://localhost:3000",
       "http://localhost:5173",
+      "https://intelli-flow-five.vercel.app",
     ],
     credentials: true,
   })
